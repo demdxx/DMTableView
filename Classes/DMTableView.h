@@ -85,24 +85,43 @@
 // Actions
 
 - (void)updateContentSize;
+- (void)updateBackgroundViews;
 - (void)reloadData;
 
 // Detecting
 
-- (NSRange)fixedColumnsRangeForRange:(NSRange)range;
-- (NSRange)fixedRpwsRangeForRange:(NSRange)range;
+- (BOOL)isFixedColumn:(NSInteger)index;
+- (BOOL)isFixedRow:(NSInteger)index;
+
+- (NSRange)fixedColumnsRangeForRange:(NSRange)range unical:(BOOL)unical;
+- (NSRange)fixedRowsRangeForRange:(NSRange)range unical:(BOOL)unical;
 
 - (NSRange)visibleColumnsRange;
 - (NSRange)visibleRowsRange;
-- (NSRange)doCheckColumnsRange;
-- (NSRange)doCheckRowsRange;
 
 // Metrics helpers
 
 - (CGSize)calculateContentSize;
 - (UIEdgeInsets)calculateScrollIndicatorInsets;
-- (CGRect)columnRectAtIndex:(NSInteger)index;
-- (CGRect)cellRectAtIndexPath:(NSIndexPath *)indexPath;
+
+/**
+ * Get column X position & WIDTH
+ *
+ * @param index
+ * @return {x: X, y: WIDTH}
+ */
+- (CGPoint)columnBounds:(NSInteger)index;
+
+/**
+ * Get row Y position & HEIGH
+ *
+ * @param index
+ * @return {y: Y, x: HEIGHT}
+ */
+- (CGPoint)rowBounds:(NSInteger)index;
+
+- (CGRect)columnRectAtIndex:(NSInteger)index xOffset:(CGFloat)offset;
+- (CGRect)cellRectAtIndexPath:(NSIndexPath *)indexPath xOffset:(CGFloat)xOffset yOffset:(CGFloat)yOffset;
 
 - (CGFloat)columnWidthAtIndex:(NSInteger)index;
 - (CGFloat)columnsHeight;

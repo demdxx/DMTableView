@@ -8,12 +8,35 @@
 
 #import "DMTableView.h"
 
+#ifndef __has_feature
+  #define __has_feature(x) 0
+#endif
+
+#if __has_feature(objc_arc)
+  #define M_OBJECT_RELEASE(obj) obj = nil
+  #define M_OBJECT_AUTORELEASE(obj) obj
+  #define M_OBJECT_DEALLOC(obj)
+  #define M_OBJECT_RETAIN(obj) obj
+  #define M_OBJECT_AUTORELEASE_START @autoreleasepool {
+  #define M_OBJECT_AUTORELEASE_END }
+#else
+  #define M_OBJECT_RELEASE(obj) if (obj!=nil) { [obj release]; obj=nil; }
+  #define M_OBJECT_AUTORELEASE(obj) [obj autorelease]
+  #define M_OBJECT_DEALLOC(obj) [obj dealloc]
+  #define M_OBJECT_RETAIN(obj) [obj retain]
+  #define M_OBJECT_AUTORELEASE_START NSAutoreleasePool pool = [[NSAutoreleasePool alloc] init];
+  #define M_OBJECT_AUTORELEASE_END [pool release];
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Hidden declaration
 ////////////////////////////////////////////////////////////////////////////////
 
 @interface DMTableView ()
+
+@property (nonatomic, strong) UIView* headerBackgroundView;
+@property (nonatomic, strong) UIView* leftBackgroundView;
 
 // Actions
 
@@ -32,15 +55,20 @@
 
 @implementation DMTableView
 {
-  NSMutableArray *_columnsPosition;
+  NSMutableDictionary *_columnsBounds;
   NSMutableArray *_columnsFixed;
-  NSMutableArray *_rowsPosition;
+  NSMutableDictionary *_rowsBounds;
   NSMutableArray *_rowsFixed;
+  
+  NSRange _fixedColumnsRange;
+  NSRange _fixedRowsRange;
 }
 
 @synthesize dataSource = _dataSource;
 @synthesize tablePadding = _tablePadding;
 @synthesize itemMargin = _itemMargin;
+@synthesize headerBackgroundView = _headerBackgroundView;
+@synthesize leftBackgroundView = _leftBackgroundView;
 
 - (id)initWithCoder:(NSCoder *)aDecoder
 {
@@ -60,10 +88,13 @@
 
 - (void)initControl
 {
-  _columnsPosition = [NSMutableArray array];
+  _columnsBounds = [NSMutableDictionary dictionary];
   _columnsFixed = [NSMutableArray array];
-  _rowsPosition = [NSMutableArray array];
+  _rowsBounds = [NSMutableDictionary dictionary];
   _rowsFixed = [NSMutableArray array];
+
+  _fixedColumnsRange = NSMakeRange(NSNotFound, 0);
+  _fixedRowsRange = NSMakeRange(NSNotFound, 0);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -92,9 +123,9 @@
 
 - (void)reloadData
 {
-  [_columnsPosition removeAllObjects];
+  [_columnsBounds removeAllObjects];
   [_columnsFixed removeAllObjects];
-  [_rowsPosition removeAllObjects];
+  [_rowsBounds removeAllObjects];
   [_rowsFixed removeAllObjects];
 
   [self updateContentSize];
@@ -105,18 +136,90 @@
 {
   NSRange colums = [self visibleColumnsRange];
   NSRange rows = [self visibleRowsRange];
-  const NSUInteger endEl = rows.location + rows.length;
-  const NSUInteger endCl = colums.location + colums.length;
+  NSUInteger endCl = colums.location + colums.length;
+  NSUInteger endEl = rows.location + rows.length;
+  NSUInteger cI = colums.location;
+  bool updateRows = false;
 
   // Update column positions and create views if necessary
-  for (int i = (int)colums.location ; i < endCl ; i++) {
-    [[self columnAtIndex:i] setFrame:[self columnRectAtIndex:i]];
+  for (NSUInteger i = cI ; i <= endCl ; i++) {
+    [[self columnAtIndex:i] setFrame:[self columnRectAtIndex:i xOffset:0]];
     // Update cells in rows
-    for (int j = (int)rows.location ; j < endEl ; j++) {
+    for (NSUInteger j = rows.location ; j <= endEl ; j++) {
       NSIndexPath *path = [NSIndexPath indexPathForRow:j column:i];
-      [[self cellAtIndexPath:path] setFrame:[self cellRectAtIndexPath:path]];
+      [[self cellAtIndexPath:path] setFrame:[self cellRectAtIndexPath:path xOffset:0 yOffset:0]];
     }
   }
+  
+  // Update fixed fields
+  {
+    NSRange nRows = [self fixedRowsRangeForRange:rows unical:NO];
+    if (NSNotFound != nRows.location) {
+      rows = nRows;
+      updateRows = true;
+    }
+  }
+  
+  colums = [self fixedColumnsRangeForRange:colums unical:NO];
+
+  // Update fixed columns
+  if (colums.location < 1000) {
+    CGFloat xOffset = _tablePadding;
+    CGFloat yOffset = _tablePadding;
+    endCl = colums.location + colums.length;
+
+    for (NSInteger i = colums.location ; i <= endCl ; i++) {
+      if ([self isFixedColumn:i]) {
+        CGRect cframe;
+        
+        // Update cells in rows
+        for (NSUInteger j = rows.location ; j <= endEl ; j++) {
+          NSIndexPath *path = [NSIndexPath indexPathForRow:j column:i];
+          UIView *cell = [self cellAtIndexPath:path];
+          cframe = [self cellRectAtIndexPath:path xOffset:xOffset yOffset:yOffset];
+          cell.frame = cframe;
+          yOffset = cframe.origin.y + cframe.size.height + _itemMargin - self.contentOffset.y;
+          [self bringSubviewToFront:cell];
+        }
+
+        // Update collumn
+        {
+          UIView *coll = [self columnAtIndex:i];
+          cframe = [self columnRectAtIndex:i xOffset:xOffset];
+          coll.frame = cframe;
+          [self bringSubviewToFront:coll];
+          xOffset = cframe.origin.x + cframe.size.width + _itemMargin - self.contentOffset.x;
+        }
+      }
+    }
+  } else if (updateRows) {
+    CGFloat xOffset = _tablePadding;
+    CGFloat yOffset = _tablePadding;
+    const NSUInteger endEl = rows.location + rows.length;
+
+    // Update cells in rows
+    for (NSUInteger j = rows.location ; j <= endEl ; j++) {
+      if ([self isFixedRow:j]) {
+        CGRect cframe;
+        for (NSUInteger i = cI ; i <= endCl ; i++) {
+          NSIndexPath *path = [NSIndexPath indexPathForRow:j column:i];
+          UIView *cell = [self cellAtIndexPath:path];
+          cframe = [self cellRectAtIndexPath:path xOffset:xOffset yOffset:yOffset];
+          cell.frame = cframe;
+          yOffset = cframe.origin.y;
+          [self bringSubviewToFront:cell];
+        }
+      }
+    }
+  }
+  
+  // Update layout positions
+  [self updateBackgroundViews];
+}
+
+- (void)updateBackgroundViews
+{
+  // TODO ...
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -176,34 +279,124 @@
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-#pragma mark – Scroll Event
-////////////////////////////////////////////////////////////////////////////////
-
-- (void)scrollViewDidScroll:(UIScrollView *)scrollView
+- (UIView *)headerBackgroundView
 {
-  if (
-      ([self.delegate respondsToSelector:@selector(tableViewHasFixedColumns:)] && [self.delegate tableViewHasFixedColumns:self]) ||
-      ([self.delegate respondsToSelector:@selector(tableViewHasFixedRows:)] && [self.delegate tableViewHasFixedRows:self])
-      ) {
-    // Recalc position
+  if (nil == _headerBackgroundView) {
+    _headerBackgroundView = [[UIView alloc] init];
+    [self addSubview:_headerBackgroundView];
   }
-  [self updateContent];
+  return _headerBackgroundView;
 }
 
+- (UIView *)leftBackgroundView
+{
+  if (nil == _leftBackgroundView) {
+    _leftBackgroundView = [[UIView alloc] init];
+    [self addSubview:_leftBackgroundView];
+  }
+  return _leftBackgroundView;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 #pragma mark – Detecting
 ////////////////////////////////////////////////////////////////////////////////
 
-- (NSRange)fixedColumnsRangeForRange:(NSRange)range
+- (BOOL)isFixedColumn:(NSInteger)index
 {
-  return NSMakeRange(0, 0);
+  if (NSNotFound != [_columnsFixed indexOfObject:@(index)]) {
+    return YES;
+  }
+  if (self.delegate && [self.delegate respondsToSelector:@selector(tableView:isFixedColumn:)]) {
+    if ([self.delegate tableView:self isFixedColumn:index]) {
+      [_columnsFixed addObject:@(index)];
+      return YES;
+    }
+  }
+  return NO;
 }
 
-- (NSRange)fixedRpwsRangeForRange:(NSRange)range
+- (BOOL)isFixedRow:(NSInteger)index
 {
-  return NSMakeRange(0, 0);
+  if (NSNotFound != [_rowsFixed indexOfObject:@(index)]) {
+    return YES;
+  }
+  if (self.delegate && [self.delegate respondsToSelector:@selector(tableView:isFixedRow:)]) {
+    if ([self.delegate tableView:self isFixedRow:index]) {
+      [_rowsFixed addObject:@(index)];
+      return YES;
+    }
+  }
+  return NO;
+}
+
+- (NSRange)fixedColumnsRangeForRange:(NSRange)range unical:(BOOL)unical
+{
+  if (!self.delegate ||
+      ![self.delegate respondsToSelector:@selector(tableViewHasFixedColumns:)] ||
+      ![self.delegate tableViewHasFixedColumns:self] ||
+      NSNotFound == range.location) {
+    return NSMakeRange(NSNotFound, 0);
+  }
+
+  NSRange r = NSMakeRange(NSNotFound, 0);
+  NSUInteger i = 0;
+  NSUInteger count = range.location + range.length;
+  
+  if (NSNotFound != _fixedColumnsRange.location) {
+    i = _fixedColumnsRange.location + 1;
+    if (unical) {
+      count = _fixedColumnsRange.location + _fixedColumnsRange.length;
+    }
+  } else if (unical) {
+    count = range.location;
+    r.location = 0;
+  }
+  
+  for (; i < count ; i++) {
+    if ([self isFixedColumn:i]) {
+      if (NSNotFound == r.location) {
+        r.location = i;
+      } else {
+        r.length = r.location - i + 2;
+      }
+    }
+  }
+  return r;
+}
+
+- (NSRange)fixedRowsRangeForRange:(NSRange)range unical:(BOOL)unical
+{
+  if (!self.delegate ||
+      ![self.delegate respondsToSelector:@selector(tableViewHasFixedRows:)] ||
+      ![self.delegate tableViewHasFixedRows:self] ||
+      NSNotFound == range.location) {
+    return NSMakeRange(NSNotFound, 0);
+  }
+  
+  NSRange r = NSMakeRange(NSNotFound, 0);
+  NSUInteger i = 0;
+  NSUInteger count = range.location + range.length;
+  
+  if (NSNotFound != _fixedRowsRange.location) {
+    i = _fixedRowsRange.location + 1;
+    if (unical) {
+      count = _fixedRowsRange.location + _fixedRowsRange.length;
+    }
+  } else if (unical) {
+    count = range.location;
+    r.location = 0;
+  }
+
+  for (; i < count ; i++) {
+    if ([self isFixedRow:i]) {
+      if (NSNotFound == r.location) {
+        r.location = i;
+      } else {
+        r.length = r.location - i + 2;
+      }
+    }
+  }
+  return r;
 }
 
 - (NSRange)visibleColumnsRange
@@ -230,25 +423,25 @@
       range.location = 0;
       range.length = 0;
     } else if (range.location + range.length >= maxCount) {
-      range.length = maxCount - range.location;
+      range.length = maxCount - range.location - 1;
     }
   } else {
     bool setted = false;
     CGFloat offset = 0;
-    range.length = maxCount;
+    range.length = maxCount - 1;
     for (NSUInteger i = 0 ; i < maxCount ; i++) {
       offset += [self columnWidthAtIndex:i] + _itemMargin;
       if (offset > scrOffset && !setted) {
         range.location = i;
         setted = true;
       } else if (offset > scrOffset + self.frame.size.width) {
-        range.length = i - range.location + 1;
+        range.length = i - range.location;
         break;
       }
     }
     // fix count
-    if (range.length > 0 && maxCount == range.length) {
-      range.length = maxCount - range.location;
+    if (range.location + range.length >= maxCount) {
+      range.length = maxCount - range.location - 1;
     }
   }
   return range;
@@ -300,54 +493,8 @@
       }
     }
     // fix count
-    if (range.length > 0 && maxCount == range.length) {
-      range.length = maxCount - range.location;
-    }
-  }
-  return range;
-}
-
-// Fixed fields range
-
-- (NSRange)doCheckColumnsRange
-{
-  if (nil == self.delegate ||
-      ![self.delegate respondsToSelector:@selector(tableView:isFixedColumn:)] ||
-      (
-        [self.delegate respondsToSelector:@selector(tableViewHasFixedColumns:)] &&
-       ![self.delegate tableViewHasFixedColumns:self]
-      ))
-  {
-    return NSMakeRange(0, 0);
-  }
-
-  NSRange range = [self visibleColumnsRange];
-  for (int i = 0 ; i < range.location + range.length ; i++) {
-    if ([self.delegate tableView:self isFixedColumn:i]) {
-      range.location = (CGFloat)i;
-      break;
-    }
-  }
-  return range;
-}
-
-- (NSRange)doCheckRowsRange
-{
-  if (nil == self.delegate ||
-      ![self.delegate respondsToSelector:@selector(tableView:isFixedRow:)] ||
-      (
-        [self.delegate respondsToSelector:@selector(tableViewHasFixedRows:)] &&
-       ![self.delegate tableViewHasFixedColumns:self]
-      ))
-  {
-    return NSMakeRange(0, 0);
-  }
-  
-  NSRange range = [self visibleRowsRange];
-  for (int i = 0 ; i < range.location + range.length ; i++) {
-    if ([self.delegate tableView:self isFixedRow:i]) {
-      range.location = (CGFloat)i;
-      break;
+    if (range.location + range.length >= maxCount) {
+      range.length = maxCount - range.location - 1;
     }
   }
   return range;
@@ -404,53 +551,117 @@
   return inserts;
 }
 
-- (CGRect)columnRectAtIndex:(NSInteger)index
+/**
+ * Get column X position & WIDTH
+ *
+ * @param index
+ * @return {x: X, y: WIDTH}
+ */
+- (CGPoint)columnBounds:(NSInteger)index
 {
-  CGFloat wOffset = _tablePadding;
-  CGFloat hOffset = _tablePadding;
+  CGPoint point = CGPointMake(0, 0);
+  NSString *key = [NSString stringWithFormat:@"%ld", index];
   
-  // Calc row "X" position
-  if (![self.delegate respondsToSelector:@selector(tableView:columnWidthAtIndex:)]) {
-    wOffset += index * ([self columnWidthAtIndex:-1] + _itemMargin);
+  if (nil == _columnsBounds[key]) {
+    CGFloat xOff = _tablePadding;
+    
+    // Calc row "X" position
+    if (![self.delegate respondsToSelector:@selector(tableView:columnWidthAtIndex:)]) {
+      xOff += index * ([self columnWidthAtIndex:-1] + _itemMargin);
+    } else {
+      for (int i = 0; i < index ; i++) {
+        xOff += [self columnWidthAtIndex:i] + _itemMargin;
+      }
+    }
+    point = CGPointMake(xOff, [self columnWidthAtIndex:index]);
+    [_columnsBounds setObject:key forKey:[NSValue valueWithCGPoint:point]];
   } else {
-    for (int i = 0; i < index ; i++) {
-      wOffset += [self columnWidthAtIndex:i] + _itemMargin;
-    }
+    point = [(NSValue *)_columnsBounds[key] CGPointValue];
   }
   
-  if (self.delegate) {
-    if ([self.delegate respondsToSelector:@selector(tableViewHasFixedColumnRow:)]) {
-      hOffset += self.contentOffset.y;
-    }
-  }
-  
-  return CGRectMake(wOffset, hOffset, [self columnWidthAtIndex:index], [self columnsHeight]);
+  M_OBJECT_RELEASE(key);
+  return point;
 }
 
-- (CGRect)cellRectAtIndexPath:(NSIndexPath *)indexPath
+/**
+ * Get row Y position & HEIGH
+ *
+ * @param index
+ * @return {y: Y, x: HEIGHT}
+ */
+- (CGPoint)rowBounds:(NSInteger)index
 {
-  CGFloat wOffset = _tablePadding;
-  CGFloat hOffset = [self columnsHeight] + _itemMargin + _tablePadding;
+  CGPoint point = CGPointMake(0, 0);
+  NSString *key = [NSString stringWithFormat:@"%ld", index];
   
-  // Calc row "X" position
-  if (![self.delegate respondsToSelector:@selector(tableView:columnWidthAtIndex:)]) {
-    wOffset += indexPath.column * ([self columnWidthAtIndex:-1] + _itemMargin);
+  if (nil == _rowsBounds[key]) {
+    CGFloat yOff = [self columnsHeight] + _itemMargin + _tablePadding;
+    
+    // Calc row "Y" position
+    if (![self.delegate respondsToSelector:@selector(tableView:rowHeightAtIndex:)]) {
+      yOff += index * ([self rowHeightAtIndex:-1] + _itemMargin);
+    } else {
+      for (int i = 0 ; i < index ; i++) {
+        yOff += [self rowHeightAtIndex:i] + _itemMargin;
+      }
+    }
+    point = CGPointMake([self rowHeightAtIndex:index], yOff);
+    [_rowsBounds setObject:key forKey:[NSValue valueWithCGPoint:point]];
   } else {
-    for (int i=0; i < indexPath.column ; i++) {
-      wOffset += [self columnWidthAtIndex:i] + _itemMargin;
+    point = [(NSValue *)_rowsBounds[key] CGPointValue];
+  }
+  
+  M_OBJECT_RELEASE(key);
+  return point;
+}
+
+/**
+ * Calculate column rect item at index
+ *
+ * @param index
+ * @return Rect for column
+ */
+- (CGRect)columnRectAtIndex:(NSInteger)index xOffset:(CGFloat)offset
+{
+  CGPoint cPoint = [self columnBounds:index];
+  CGRect rect = CGRectMake(cPoint.x, _tablePadding, cPoint.y, [self columnsHeight]);
+  
+  // Post process
+  if (self.delegate) {
+    // If column row fixed correct vertical position
+    if ([self.delegate respondsToSelector:@selector(tableViewHasFixedColumnRow:)] ||
+        [self.delegate tableViewHasFixedColumnRow:self])
+    {
+      rect.origin.y += self.contentOffset.y;
+    }
+    
+    // If this column fixed correct horizontal position
+    CGFloat xLeft = rect.origin.x - self.contentOffset.x;
+    if (xLeft < offset && [self isFixedColumn:index]) {
+      rect.origin.x = offset + self.contentOffset.x;
     }
   }
   
-  // Calc row "Y" position
-  if (![self.delegate respondsToSelector:@selector(tableView:rowHeightAtIndex:)]) {
-    hOffset += indexPath.row * ([self rowHeightAtIndex:-1] + _itemMargin);
-  } else {
-    for (int i = 0 ; i < indexPath.row ; i++) {
-      hOffset += [self rowHeightAtIndex:i] + _itemMargin;
+  return rect;
+}
+
+- (CGRect)cellRectAtIndexPath:(NSIndexPath *)indexPath xOffset:(CGFloat)xOffset yOffset:(CGFloat)yOffset
+{
+  CGPoint rPoint = [self rowBounds:indexPath.row];
+  CGPoint cPoint = [self columnBounds:indexPath.column];
+  CGRect rect = CGRectMake(cPoint.x, rPoint.y, cPoint.y, rPoint.x);
+  
+  // Post process
+  if (self.delegate) {
+//    NSLog(@"X: %f => %f O %f", self.contentOffset.x, rect.origin.x, xOffset);
+    if (rect.origin.x - self.contentOffset.x < xOffset && [self isFixedColumn:indexPath.column]) {
+      rect.origin.x = xOffset + self.contentOffset.x;
+    }
+    if ([self isFixedRow:indexPath.row]) {
+      rect.origin.y = yOffset + self.contentOffset.y;
     }
   }
-  
-  return CGRectMake(wOffset, hOffset, [self columnWidthAtIndex:indexPath.column], [self rowHeightAtIndex:indexPath.row]);
+  return rect;
 }
 
 - (CGFloat)columnWidthAtIndex:(NSInteger)index
@@ -507,6 +718,7 @@
     column.tag = [self tagForColumnAtIndex:index];
     // TODO: Add event handler
     [self addSubview:column];
+    [self bringSubviewToFront:column];
   }
   column.backgroundColor = 0 == index %2
                          ? [UIColor yellowColor]
@@ -519,6 +731,7 @@
     cell.tag = [self tagForCellAtIndexPath:indexPath];
     // TODO: Add event handler
     [self addSubview:cell];
+    [self sendSubviewToBack:cell];
   }
   cell.backgroundColor = 0 == (indexPath.row + indexPath.column) % 2
                        ? [UIColor orangeColor]
