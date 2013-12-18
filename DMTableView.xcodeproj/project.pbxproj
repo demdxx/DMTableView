@@ -23,6 +23,7 @@
 		B3A6D974185AF58700132E5C /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = B3A6D972185AF58700132E5C /* InfoPlist.strings */; };
 		B3A6D976185AF58700132E5C /* DMTableViewTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B3A6D975185AF58700132E5C /* DMTableViewTests.m */; };
 		B3A6D985185AF6E000132E5C /* DMTableView.m in Sources */ = {isa = PBXBuildFile; fileRef = B3A6D984185AF6E000132E5C /* DMTableView.m */; };
+		B3B5101D186184F100D2F6B0 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B3B5101C186184F100D2F6B0 /* QuartzCore.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -58,6 +59,7 @@
 		B3A6D975185AF58700132E5C /* DMTableViewTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = DMTableViewTests.m; sourceTree = "<group>"; };
 		B3A6D983185AF6E000132E5C /* DMTableView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = DMTableView.h; sourceTree = "<group>"; };
 		B3A6D984185AF6E000132E5C /* DMTableView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = DMTableView.m; sourceTree = "<group>"; };
+		B3B5101C186184F100D2F6B0 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -65,6 +67,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B3B5101D186184F100D2F6B0 /* QuartzCore.framework in Frameworks */,
 				B3A6D94A185AF58700132E5C /* CoreGraphics.framework in Frameworks */,
 				B3A6D94C185AF58700132E5C /* UIKit.framework in Frameworks */,
 				B3A6D948185AF58700132E5C /* Foundation.framework in Frameworks */,
@@ -107,6 +110,7 @@
 		B3A6D946185AF58700132E5C /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				B3B5101C186184F100D2F6B0 /* QuartzCore.framework */,
 				B3A6D947185AF58700132E5C /* Foundation.framework */,
 				B3A6D949185AF58700132E5C /* CoreGraphics.framework */,
 				B3A6D94B185AF58700132E5C /* UIKit.framework */,
@@ -488,6 +492,7 @@
 				B3A6D97B185AF58700132E5C /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 		B3A6D97C185AF58700132E5C /* Build configuration list for PBXNativeTarget "DMTableViewTests" */ = {
 			isa = XCConfigurationList;
@@ -496,6 +501,7 @@
 				B3A6D97E185AF58700132E5C /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};

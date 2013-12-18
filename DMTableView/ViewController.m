@@ -67,7 +67,7 @@
 
 - (BOOL)tableView:(DMTableView *)tableView isFixedColumn:(NSInteger)index
 {
-  return index < 2;
+  return index % 2 == 0;
 }
 
 - (BOOL)tableView:(DMTableView *)tableView isFixedRow:(NSInteger)index

@@ -84,12 +84,17 @@
 
 // Actions
 
+- (void)updateFixedColumns:(NSRange)columns rows:(NSRange)rows;
 - (void)updateContentSize;
 - (void)updateBackgroundViews;
 - (void)reloadData;
 
 // Detecting
 
+- (BOOL)hasFixedColumns;
+- (BOOL)hasFixedRows;
+
+- (BOOL)isFixedColumnRow;
 - (BOOL)isFixedColumn:(NSInteger)index;
 - (BOOL)isFixedRow:(NSInteger)index;
 

@@ -56,9 +56,11 @@
 @implementation DMTableView
 {
   NSMutableDictionary *_columnsBounds;
-  NSMutableArray *_columnsFixed;
+  NSMutableSet *_currentColumnsFixed;
+  NSMutableSet *_columnsFixed;
   NSMutableDictionary *_rowsBounds;
-  NSMutableArray *_rowsFixed;
+  NSMutableSet *_currentRowsFixed;
+  NSMutableSet *_rowsFixed;
   
   NSRange _fixedColumnsRange;
   NSRange _fixedRowsRange;
@@ -89,9 +91,12 @@
 - (void)initControl
 {
   _columnsBounds = [NSMutableDictionary dictionary];
-  _columnsFixed = [NSMutableArray array];
+  _currentColumnsFixed = [NSMutableSet set];
+  _columnsFixed = [NSMutableSet set];
+
   _rowsBounds = [NSMutableDictionary dictionary];
-  _rowsFixed = [NSMutableArray array];
+  _currentRowsFixed = [NSMutableSet set];
+  _rowsFixed = [NSMutableSet set];
 
   _fixedColumnsRange = NSMakeRange(NSNotFound, 0);
   _fixedRowsRange = NSMakeRange(NSNotFound, 0);
@@ -134,24 +139,45 @@
 
 - (void)updateContent
 {
-  NSRange colums = [self visibleColumnsRange];
+  NSRange columns = [self visibleColumnsRange];
   NSRange rows = [self visibleRowsRange];
-  NSUInteger endCl = colums.location + colums.length;
+  NSUInteger endCl = columns.location + columns.length;
   NSUInteger endEl = rows.location + rows.length;
-  NSUInteger cI = colums.location;
-  bool updateRows = false;
+  NSUInteger cI = columns.location;
 
+  //
   // Update column positions and create views if necessary
+  //
   for (NSUInteger i = cI ; i <= endCl ; i++) {
-    [[self columnAtIndex:i] setFrame:[self columnRectAtIndex:i xOffset:0]];
     // Update cells in rows
     for (NSUInteger j = rows.location ; j <= endEl ; j++) {
       NSIndexPath *path = [NSIndexPath indexPathForRow:j column:i];
-      [[self cellAtIndexPath:path] setFrame:[self cellRectAtIndexPath:path xOffset:0 yOffset:0]];
+      [self cellAtIndexPath:path];
     }
+    
+    // Update column
+    [self columnAtIndex:i];
   }
   
+  // Move header to front
+  [self bringSubviewToFront:self.headerBackgroundView];
+
   // Update fixed fields
+  [self updateFixedColumns:columns rows:rows];
+  
+  // Columns to front
+  [self bringSubviewToFront:self.headerBackgroundView];
+  
+  // Update layout positions
+  [self updateBackgroundViews];
+}
+
+- (void)updateFixedColumns:(NSRange)columns rows:(NSRange)rows
+{
+  NSUInteger cI = columns.location;
+  NSUInteger endCl = columns.location + columns.length;
+  NSUInteger endEl = rows.location + rows.length;
+  bool updateRows = false;
   {
     NSRange nRows = [self fixedRowsRangeForRange:rows unical:NO];
     if (NSNotFound != nRows.location) {
@@ -160,15 +186,14 @@
     }
   }
   
-  colums = [self fixedColumnsRangeForRange:colums unical:NO];
-
-  // Update fixed columns
-  if (colums.location < 1000) {
+  columns = [self fixedColumnsRangeForRange:columns unical:NO];
+  
+  if (columns.location < 1000) {
     CGFloat xOffset = _tablePadding;
     CGFloat yOffset = _tablePadding;
-    endCl = colums.location + colums.length;
-
-    for (NSInteger i = colums.location ; i <= endCl ; i++) {
+    endCl = MAX(columns.location + columns.length, endCl);
+    
+    for (NSInteger i = columns.location ; i <= endCl ; i++) {
       if ([self isFixedColumn:i]) {
         CGRect cframe;
         
@@ -181,13 +206,13 @@
           yOffset = cframe.origin.y + cframe.size.height + _itemMargin - self.contentOffset.y;
           [self bringSubviewToFront:cell];
         }
-
+        
         // Update collumn
         {
           UIView *coll = [self columnAtIndex:i];
           cframe = [self columnRectAtIndex:i xOffset:xOffset];
           coll.frame = cframe;
-          [self bringSubviewToFront:coll];
+          [self.headerBackgroundView bringSubviewToFront:coll];
           xOffset = cframe.origin.x + cframe.size.width + _itemMargin - self.contentOffset.x;
         }
       }
@@ -196,7 +221,7 @@
     CGFloat xOffset = _tablePadding;
     CGFloat yOffset = _tablePadding;
     const NSUInteger endEl = rows.location + rows.length;
-
+    
     // Update cells in rows
     for (NSUInteger j = rows.location ; j <= endEl ; j++) {
       if ([self isFixedRow:j]) {
@@ -212,14 +237,28 @@
       }
     }
   }
-  
-  // Update layout positions
-  [self updateBackgroundViews];
 }
 
 - (void)updateBackgroundViews
 {
-  // TODO ...
+  //
+  // Update header view
+  //
+  {
+    // If column row fixed correct vertical position
+    const CGFloat yOffset = [self isFixedColumnRow] ? self.contentOffset.y : 0;
+    CGRect topColumnsFrame = CGRectMake(0, yOffset, self.contentSize.width,
+                                        _tablePadding + self.columnsHeight + _itemMargin);
+    self.headerBackgroundView.frame = topColumnsFrame;
+  }
+  
+  //
+  // Update left block view
+  //
+//  if (self.hasFixedColumns)
+//  {
+//    CGRect leftBarFrame = CGRectMake(0, 0, 0, 0);
+//  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -258,7 +297,9 @@
   UIView *cell;
   if ([self.delegate respondsToSelector:@selector(tableView:cellAtIndexPath:)]) {
     cell = [self.delegate tableView:self cellAtIndexPath:indexPath];
-    [self tableViewCellPrepare:cell atIndexPath:indexPath];
+    if (cell.superview != self) {
+      [self tableViewCellPrepare:cell atIndexPath:indexPath];
+    }
   } else if ([_dataSource respondsToSelector:@selector(tableView:textForCellAtIndexPath:)]) {
     cell = [self dequeueReusableCellWithIdentifier:@"Cell" indexPath:indexPath];
     if (nil == cell) {
@@ -284,6 +325,7 @@
   if (nil == _headerBackgroundView) {
     _headerBackgroundView = [[UIView alloc] init];
     [self addSubview:_headerBackgroundView];
+    _headerBackgroundView.backgroundColor = [UIColor colorWithRed:0.3 green:0.7 blue:0.2 alpha:1];
   }
   return _headerBackgroundView;
 }
@@ -293,6 +335,7 @@
   if (nil == _leftBackgroundView) {
     _leftBackgroundView = [[UIView alloc] init];
     [self addSubview:_leftBackgroundView];
+    _leftBackgroundView.backgroundColor = [UIColor colorWithRed:0.7 green:0.3 blue:0.5 alpha:1];
   }
   return _leftBackgroundView;
 }
@@ -301,9 +344,35 @@
 #pragma mark – Detecting
 ////////////////////////////////////////////////////////////////////////////////
 
+- (BOOL)isFixedColumnRow
+{
+  return [self.delegate respondsToSelector:@selector(tableViewHasFixedColumnRow:)]
+      || [self.delegate tableViewHasFixedColumnRow:self];
+}
+
+- (BOOL)hasFixedColumns
+{
+  if (self.delegate &&
+     [self.delegate respondsToSelector:@selector(tableViewHasFixedColumns:)])
+  {
+    return [self.delegate tableViewHasFixedColumns:self];
+  }
+  return NO;
+}
+
+- (BOOL)hasFixedRows
+{
+  if (self.delegate &&
+      [self.delegate respondsToSelector:@selector(tableViewHasFixedRows:)])
+  {
+    return [self.delegate tableViewHasFixedRows:self];
+  }
+  return NO;
+}
+
 - (BOOL)isFixedColumn:(NSInteger)index
 {
-  if (NSNotFound != [_columnsFixed indexOfObject:@(index)]) {
+  if ([_columnsFixed containsObject:@(index)]) {
     return YES;
   }
   if (self.delegate && [self.delegate respondsToSelector:@selector(tableView:isFixedColumn:)]) {
@@ -317,7 +386,7 @@
 
 - (BOOL)isFixedRow:(NSInteger)index
 {
-  if (NSNotFound != [_rowsFixed indexOfObject:@(index)]) {
+  if ([_rowsFixed containsObject:@(index)]) {
     return YES;
   }
   if (self.delegate && [self.delegate respondsToSelector:@selector(tableView:isFixedRow:)]) {
@@ -357,7 +426,7 @@
       if (NSNotFound == r.location) {
         r.location = i;
       } else {
-        r.length = r.location - i + 2;
+        r.length = i - r.location + 1;
       }
     }
   }
@@ -628,20 +697,12 @@
   
   // Post process
   if (self.delegate) {
-    // If column row fixed correct vertical position
-    if ([self.delegate respondsToSelector:@selector(tableViewHasFixedColumnRow:)] ||
-        [self.delegate tableViewHasFixedColumnRow:self])
-    {
-      rect.origin.y += self.contentOffset.y;
-    }
-    
     // If this column fixed correct horizontal position
     CGFloat xLeft = rect.origin.x - self.contentOffset.x;
     if (xLeft < offset && [self isFixedColumn:index]) {
       rect.origin.x = offset + self.contentOffset.x;
     }
   }
-  
   return rect;
 }
 
@@ -714,10 +775,11 @@
 
 - (void)tableViewColumnPrepare:(UIView *)column atIndex:(NSInteger)index
 {
-  if (column.superview != self) {
+  if (column.superview != self.headerBackgroundView) {
     column.tag = [self tagForColumnAtIndex:index];
+    column.frame = [self columnRectAtIndex:index xOffset:0];
     // TODO: Add event handler
-    [self addSubview:column];
+    [self.headerBackgroundView addSubview:column];
     [self bringSubviewToFront:column];
   }
   column.backgroundColor = 0 == index %2
@@ -729,6 +791,9 @@
 {
   if (cell.superview != self) {
     cell.tag = [self tagForCellAtIndexPath:indexPath];
+    cell.frame = [self cellRectAtIndexPath:indexPath xOffset:0 yOffset:0];
+    cell.layer.borderWidth = 2;
+    cell.layer.borderColor = [UIColor redColor].CGColor;
     // TODO: Add event handler
     [self addSubview:cell];
     [self sendSubviewToBack:cell];
