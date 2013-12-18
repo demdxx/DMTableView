@@ -38,6 +38,11 @@
 - (CGFloat)tableViewRowHeight:(DMTableView *)tableView;
 - (CGFloat)tableView:(DMTableView *)tableView rowHeightAtIndex:(NSInteger)index;
 
+// Helpers
+
+- (void)tableView:(DMTableView *)tableView prepareColumnView:(UIView *)column atIndex:(NSInteger)index;
+- (void)tableView:(DMTableView *)tableView prepareCellView:(UIView *)cell atIndexPath:(NSIndexPath *)indexPath;
+
 // Events
 
 - (void)tableViewClick:(DMTableView *)tableView cell:(UIView *)cell indexPath:(NSIndexPath *)indexPath;
@@ -57,6 +62,9 @@
 
 - (NSString *)tableView:(DMTableView *)tableView titleForColumnAtIndex:(NSInteger)index;
 - (NSString *)tableView:(DMTableView *)tableView textForCellAtIndexPath:(NSIndexPath *)indexPath;
+
+- (id)tableView:(DMTableView *)tableView dataForColumnAtIndex:(NSInteger)index;
+- (id)tableView:(DMTableView *)tableView dataForCellAtIndexPath:(NSIndexPath *)indexPath;
 
 @end
 

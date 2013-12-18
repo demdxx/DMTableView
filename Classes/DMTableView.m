@@ -40,7 +40,7 @@
 
 // Actions
 
-- (void)updateContent;
+- (void)updateContent:(BOOL)updateAll;
 
 // Helpers
 
@@ -113,10 +113,9 @@
   static bool init = false;
   if (!init) {
     [self updateContentSize];
-    [self updateContent];
     init = true;
   } else {
-    [self updateContent];
+    [self updateContent:NO];
   }
 }
 
@@ -124,6 +123,7 @@
 {
   self.contentSize = [self calculateContentSize];
   self.scrollIndicatorInsets = [self calculateScrollIndicatorInsets];
+  [self updateContent:YES];
 }
 
 - (void)reloadData
@@ -132,12 +132,14 @@
   [_columnsFixed removeAllObjects];
   [_rowsBounds removeAllObjects];
   [_rowsFixed removeAllObjects];
+  
+//  [self clea]
 
   [self updateContentSize];
-  [self updateContent];
+  [self updateContent:NO];
 }
 
-- (void)updateContent
+- (void)updateContent:(BOOL)updateAll
 {
   NSRange columns = [self visibleColumnsRange];
   NSRange rows = [self visibleRowsRange];
@@ -152,11 +154,17 @@
     // Update cells in rows
     for (NSUInteger j = rows.location ; j <= endEl ; j++) {
       NSIndexPath *path = [NSIndexPath indexPathForRow:j column:i];
-      [self cellAtIndexPath:path];
+      UIView *cell = [self cellAtIndexPath:path];
+      if (updateAll) {
+        [cell setFrame:[self cellRectAtIndexPath:path xOffset:0 yOffset:0]];
+      }
     }
     
     // Update column
-    [self columnAtIndex:i];
+    UIView *coll = [self columnAtIndex:i];
+    if (updateAll) {
+      [coll setFrame:[self columnRectAtIndex:i xOffset:0]];
+    }
   }
   
   // Move header to front
@@ -207,7 +215,7 @@
           [self bringSubviewToFront:cell];
         }
         
-        // Update collumn
+        // Update column
         {
           UIView *coll = [self columnAtIndex:i];
           cframe = [self columnRectAtIndex:i xOffset:xOffset];
@@ -311,12 +319,21 @@
   return cell;
 }
 
-- (void)setItemBorder:(CGFloat)itemBorder
+- (void)setItemMargin:(CGFloat)itemMargin
 {
-  if (_itemMargin != itemBorder) {
-    _itemMargin = itemBorder;
+  if (_itemMargin != itemMargin) {
+    _itemMargin = itemMargin;
     [self updateContentSize];
-    [self updateContent];
+    [self updateContent:YES];
+  }
+}
+
+- (void)setTablePadding:(CGFloat)tablePadding
+{
+  if (_tablePadding != tablePadding) {
+    _tablePadding = tablePadding;
+    [self updateContentSize];
+    [self updateContent:YES];
   }
 }
 
@@ -325,7 +342,6 @@
   if (nil == _headerBackgroundView) {
     _headerBackgroundView = [[UIView alloc] init];
     [self addSubview:_headerBackgroundView];
-    _headerBackgroundView.backgroundColor = [UIColor colorWithRed:0.3 green:0.7 blue:0.2 alpha:1];
   }
   return _headerBackgroundView;
 }
@@ -335,7 +351,6 @@
   if (nil == _leftBackgroundView) {
     _leftBackgroundView = [[UIView alloc] init];
     [self addSubview:_leftBackgroundView];
-    _leftBackgroundView.backgroundColor = [UIColor colorWithRed:0.7 green:0.3 blue:0.5 alpha:1];
   }
   return _leftBackgroundView;
 }
@@ -347,7 +362,7 @@
 - (BOOL)isFixedColumnRow
 {
   return [self.delegate respondsToSelector:@selector(tableViewHasFixedColumnRow:)]
-      || [self.delegate tableViewHasFixedColumnRow:self];
+      && [self.delegate tableViewHasFixedColumnRow:self];
 }
 
 - (BOOL)hasFixedColumns
@@ -629,7 +644,7 @@
 - (CGPoint)columnBounds:(NSInteger)index
 {
   CGPoint point = CGPointMake(0, 0);
-  NSString *key = [NSString stringWithFormat:@"%ld", index];
+  NSString *key = [NSString stringWithFormat:@"%ld", (long)index];
   
   if (nil == _columnsBounds[key]) {
     CGFloat xOff = _tablePadding;
@@ -661,7 +676,7 @@
 - (CGPoint)rowBounds:(NSInteger)index
 {
   CGPoint point = CGPointMake(0, 0);
-  NSString *key = [NSString stringWithFormat:@"%ld", index];
+  NSString *key = [NSString stringWithFormat:@"%ld", (long)index];
   
   if (nil == _rowsBounds[key]) {
     CGFloat yOff = [self columnsHeight] + _itemMargin + _tablePadding;
@@ -781,10 +796,14 @@
     // TODO: Add event handler
     [self.headerBackgroundView addSubview:column];
     [self bringSubviewToFront:column];
+    
+    // Prepare column view at index
+    if (self.delegate &&
+       [self.delegate respondsToSelector:@selector(tableView:prepareColumnView:atIndex:)])
+    {
+      [self.delegate tableView:self prepareColumnView:column atIndex:index];
+    }
   }
-  column.backgroundColor = 0 == index %2
-                         ? [UIColor yellowColor]
-                         : [UIColor magentaColor];
 }
 
 - (void)tableViewCellPrepare:(UIView *)cell atIndexPath:(NSIndexPath *)indexPath
@@ -792,15 +811,17 @@
   if (cell.superview != self) {
     cell.tag = [self tagForCellAtIndexPath:indexPath];
     cell.frame = [self cellRectAtIndexPath:indexPath xOffset:0 yOffset:0];
-    cell.layer.borderWidth = 2;
-    cell.layer.borderColor = [UIColor redColor].CGColor;
     // TODO: Add event handler
     [self addSubview:cell];
     [self sendSubviewToBack:cell];
+    
+    // Prepare column view at index
+    if (self.delegate &&
+       [self.delegate respondsToSelector:@selector(tableView:prepareCellView:atIndexPath:)])
+    {
+      [self.delegate tableView:self prepareCellView:cell atIndexPath:indexPath];
+    }
   }
-  cell.backgroundColor = 0 == (indexPath.row + indexPath.column) % 2
-                       ? [UIColor orangeColor]
-                       : [UIColor cyanColor];
 }
 
 - (UIView *)dequeueReusableColumnWithIdentifier:(NSString *)identifier index:(NSInteger)index
