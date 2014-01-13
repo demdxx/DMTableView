@@ -24,6 +24,7 @@
 // Flags
 
 - (BOOL)tableViewHasFixedColumnRow:(DMTableView *)tableView;
+- (BOOL)tableViewHasStrictFixedColumnRow:(DMTableView *)tableView;
 - (BOOL)tableViewHasFixedColumns:(DMTableView *)tableView;
 - (BOOL)tableViewHasFixedRows:(DMTableView *)tableView;
 
@@ -40,11 +41,14 @@
 
 // Helpers
 
+- (void)tableView:(DMTableView *)tableView atIndex:(NSInteger)index;
 - (void)tableView:(DMTableView *)tableView prepareColumnView:(UIView *)column atIndex:(NSInteger)index;
+- (void)tableView:(DMTableView *)tableView prepareRowAtIndex:(NSInteger)index;
 - (void)tableView:(DMTableView *)tableView prepareCellView:(UIView *)cell atIndexPath:(NSIndexPath *)indexPath;
 
 // Events
 
+- (void)tableViewUpdateContentComplete:(DMTableView *)tableView;
 - (void)tableViewClick:(DMTableView *)tableView cell:(UIView *)cell indexPath:(NSIndexPath *)indexPath;
 
 @end
@@ -80,6 +84,11 @@
 @property (nonatomic, assign) CGFloat tablePadding;
 @property (nonatomic, assign) CGFloat itemMargin;
 
+@property (nonatomic, strong) UIView* headerBackgroundView;
+
+@property (nonatomic, readonly) UIView *paddingViewLeft;
+@property (nonatomic, readonly) UIView *paddingViewTop;
+
 - (void)initControl;
 
 // Getters/Setters
@@ -103,6 +112,7 @@
 - (BOOL)hasFixedRows;
 
 - (BOOL)isFixedColumnRow;
+- (BOOL)isStrictFixedColumnRow;
 - (BOOL)isFixedColumn:(NSInteger)index;
 - (BOOL)isFixedRow:(NSInteger)index;
 

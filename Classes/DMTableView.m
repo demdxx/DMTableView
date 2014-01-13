@@ -29,13 +29,21 @@
 #endif
 
 
+static inline UIColor *prepareBackgroundPadding(UIColor *bg)
+{
+  if (nil == bg || bg == [UIColor clearColor]) {
+    return [UIColor whiteColor];
+  }
+  return bg;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////
 /// Hidden declaration
 ////////////////////////////////////////////////////////////////////////////////
 
 @interface DMTableView ()
 
-@property (nonatomic, strong) UIView* headerBackgroundView;
 @property (nonatomic, strong) UIView* leftBackgroundView;
 
 // Actions
@@ -71,6 +79,8 @@
 @synthesize itemMargin = _itemMargin;
 @synthesize headerBackgroundView = _headerBackgroundView;
 @synthesize leftBackgroundView = _leftBackgroundView;
+@synthesize paddingViewLeft = _paddingViewLeft;
+@synthesize paddingViewTop = _paddingViewTop;
 
 - (id)initWithCoder:(NSCoder *)aDecoder
 {
@@ -150,20 +160,34 @@
   //
   // Update column positions and create views if necessary
   //
-  for (NSUInteger i = cI ; i <= endCl ; i++) {
-    // Update cells in rows
-    for (NSUInteger j = rows.location ; j <= endEl ; j++) {
-      NSIndexPath *path = [NSIndexPath indexPathForRow:j column:i];
-      UIView *cell = [self cellAtIndexPath:path];
-      if (updateAll) {
-        [cell setFrame:[self cellRectAtIndexPath:path xOffset:0 yOffset:0]];
+  if (endCl > 0) {
+    for (NSUInteger i = cI ; i <= endCl ; i++) {
+      // Update cells in rows
+      for (NSUInteger j = rows.location ; j <= endEl ; j++) {
+        NSIndexPath *path = [NSIndexPath indexPathForRow:j column:i];
+        UIView *cell = [self cellAtIndexPath:path];
+        if (updateAll) {
+          [cell setFrame:[self cellRectAtIndexPath:path xOffset:0 yOffset:0]];
+        }
+        
+        // Prepare row
+        if (i == cI) {
+          if (self.delegate && [self.delegate respondsToSelector:@selector(tableView:prepareRowAtIndex:)]) {
+            [self.delegate tableView:self prepareRowAtIndex:j];
+          }
+        }
       }
-    }
-    
-    // Update column
-    UIView *coll = [self columnAtIndex:i];
-    if (updateAll) {
-      [coll setFrame:[self columnRectAtIndex:i xOffset:0]];
+      
+      // Update column
+      UIView *coll = [self columnAtIndex:i];
+      if (updateAll) {
+        [coll setFrame:[self columnRectAtIndex:i xOffset:0]];
+      }
+      
+      // Prepare column
+      if (self.delegate && [self.delegate respondsToSelector:@selector(tableView:atIndex:)]) {
+        [self.delegate tableView:self atIndex:i];
+      }
     }
   }
   
@@ -178,6 +202,35 @@
   
   // Update layout positions
   [self updateBackgroundViews];
+  
+  // Update left&top border
+  if (_tablePadding > 0.f) {
+    const CGFloat top = self.contentOffset.y;
+    UIView *padding = self.paddingViewLeft;
+    if (padding) {
+      const CGFloat left = self.contentOffset.x;
+      padding.frame = CGRectMake(0, top, (left > 0 ? left : 0)+_tablePadding, self.contentSize.height);
+      padding.alpha = 1.f;
+      [self bringSubviewToFront:padding];
+    }
+    
+    padding = self.paddingViewTop;
+    if (padding) {
+      CGPoint cPos = [self columnRectAtIndex:0 xOffset:0].origin;
+      padding.frame = CGRectMake(0, top, self.contentSize.width, cPos.y);
+      padding.alpha = 1.f;
+      [self bringSubviewToFront:padding];
+    }
+  } else {
+    self.paddingViewLeft.alpha = 0;
+    self.paddingViewTop.alpha = 0;
+  }
+  
+  // Complete update event
+  if (self.delegate
+  && [self.delegate respondsToSelector:@selector(tableViewUpdateContentComplete:)]) {
+    [self.delegate tableViewUpdateContentComplete:self];
+  }
 }
 
 - (void)updateFixedColumns:(NSRange)columns rows:(NSRange)rows
@@ -254,7 +307,12 @@
   //
   {
     // If column row fixed correct vertical position
-    const CGFloat yOffset = [self isFixedColumnRow] ? self.contentOffset.y : 0;
+    CGFloat yOffset = 0;
+    if (self.isStrictFixedColumnRow) {
+      yOffset = self.contentOffset.y;
+    } else if (self.isFixedColumnRow) {
+      yOffset = self.contentOffset.y < 0.f ? 0 : self.contentOffset.y;
+    }
     CGRect topColumnsFrame = CGRectMake(0, yOffset, self.contentSize.width,
                                         _tablePadding + self.columnsHeight + _itemMargin);
     self.headerBackgroundView.frame = topColumnsFrame;
@@ -355,21 +413,69 @@
   return _leftBackgroundView;
 }
 
+- (UIView *)paddingViewLeft
+{
+  if (_tablePadding > 0.f && self.hasFixedColumns && [self isFixedColumn:0]) {
+    if (nil == _paddingViewLeft) {
+      _paddingViewLeft = [[UIView alloc] initWithFrame:CGRectMake(0, 0, _tablePadding, self.frame.size.height)];
+      _paddingViewLeft.autoresizingMask = UIViewAutoresizingFlexibleHeight;
+      _paddingViewLeft.backgroundColor = prepareBackgroundPadding(self.backgroundColor);
+      [self addSubview:_paddingViewLeft];
+      [self bringSubviewToFront:_paddingViewLeft];
+    }
+  } else if (_paddingViewLeft) {
+    _paddingViewLeft.alpha = 0.f;
+    return nil;
+  }
+  return _paddingViewLeft;
+}
+
+- (UIView *)paddingViewTop
+{
+  if (_tablePadding > 0.f && self.isFixedColumnRow) {
+    if (nil == _paddingViewTop) {
+      _paddingViewTop = [[UIView alloc] initWithFrame:CGRectMake(0, 0, self.frame.size.width, _tablePadding)];
+      _paddingViewTop.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+      _paddingViewTop.backgroundColor = prepareBackgroundPadding(self.backgroundColor);
+      [self addSubview:_paddingViewTop];
+      [self bringSubviewToFront:_paddingViewTop];
+    }
+  } else if (_paddingViewTop) {
+    _paddingViewTop.alpha = 0.f;
+    return nil;
+  }
+  return _paddingViewTop;
+}
+
+- (void)setBackgroundColor:(UIColor *)backgroundColor
+{
+  [super setBackgroundColor:backgroundColor];
+  self.paddingViewLeft.backgroundColor = prepareBackgroundPadding(backgroundColor);
+  self.paddingViewTop.backgroundColor = prepareBackgroundPadding(backgroundColor);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 #pragma mark – Detecting
 ////////////////////////////////////////////////////////////////////////////////
 
 - (BOOL)isFixedColumnRow
 {
-  return [self.delegate respondsToSelector:@selector(tableViewHasFixedColumnRow:)]
-      && [self.delegate tableViewHasFixedColumnRow:self];
+  if ([self.delegate respondsToSelector:@selector(tableViewHasFixedColumnRow:)]) {
+    return [self.delegate tableViewHasFixedColumnRow:self];
+  }
+  return [self isStrictFixedColumnRow];
+}
+
+- (BOOL)isStrictFixedColumnRow
+{
+  return [self.delegate respondsToSelector:@selector(tableViewHasStrictFixedColumnRow:)]
+      && [self.delegate tableViewHasStrictFixedColumnRow:self];
 }
 
 - (BOOL)hasFixedColumns
 {
-  if (self.delegate &&
-     [self.delegate respondsToSelector:@selector(tableViewHasFixedColumns:)])
-  {
+  if (self.delegate
+  && [self.delegate respondsToSelector:@selector(tableViewHasFixedColumns:)]) {
     return [self.delegate tableViewHasFixedColumns:self];
   }
   return NO;
@@ -378,8 +484,7 @@
 - (BOOL)hasFixedRows
 {
   if (self.delegate &&
-      [self.delegate respondsToSelector:@selector(tableViewHasFixedRows:)])
-  {
+      [self.delegate respondsToSelector:@selector(tableViewHasFixedRows:)]) {
     return [self.delegate tableViewHasFixedRows:self];
   }
   return NO;
@@ -415,10 +520,7 @@
 
 - (NSRange)fixedColumnsRangeForRange:(NSRange)range unical:(BOOL)unical
 {
-  if (!self.delegate ||
-      ![self.delegate respondsToSelector:@selector(tableViewHasFixedColumns:)] ||
-      ![self.delegate tableViewHasFixedColumns:self] ||
-      NSNotFound == range.location) {
+  if (!self.hasFixedColumns || NSNotFound == range.location) {
     return NSMakeRange(NSNotFound, 0);
   }
 
@@ -487,6 +589,11 @@
 {
   NSRange range = NSMakeRange(0, 0);
   const NSInteger maxCount = self.columnsCount;
+  
+  if (maxCount < 1) {
+    return range;
+  }
+  
   const CGFloat scrOffset = self.contentOffset.x - _tablePadding;
 
   // -+--*---+--+----+-*--+-
@@ -535,6 +642,11 @@
 {
   NSRange range = NSMakeRange(0, 0);
   const NSInteger maxCount = self.rowsCount;
+  
+  if (maxCount < 1) {
+    return range;
+  }
+  
   const CGFloat scrOffset = self.contentOffset.y - _tablePadding;
 
   // -+--*---+--+----+-*--+-
@@ -560,7 +672,7 @@
       range.location = 0;
       range.length = 0;
     } else if (range.location + range.length >= maxCount) {
-      range.length = maxCount - range.location;
+      range.length = maxCount - range.location - 1;
     }
   } else {
     bool setted = false;
@@ -613,9 +725,9 @@
   }
   
   // Correct content size
-  if (size.height < self.frame.size.height) {
-    size.height = self.frame.size.height;
-  }
+//  if (size.height < self.frame.size.height) {
+//    size.height = self.frame.size.height;
+//  }
   
   if (size.width < self.frame.size.width) {
     size.width = self.frame.size.width;
