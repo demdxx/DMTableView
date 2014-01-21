@@ -54,6 +54,7 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
 
 - (NSInteger)tagForColumnAtIndex:(NSInteger)index;
 - (NSInteger)tagForCellAtIndexPath:(NSIndexPath *)indexPath;
+- (NSInteger)indexForColumn:(UIView *)column;
 
 @end
 
@@ -131,22 +132,46 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
 
 - (void)updateContentSize
 {
-  self.contentSize = [self calculateContentSize];
+  CGSize cSize = [self calculateContentSize];
+  if (cSize.height <= self.bounds.size.height) {
+    cSize.height = self.bounds.size.height + 1;
+  }
+
+  self.contentSize = cSize;
   self.scrollIndicatorInsets = [self calculateScrollIndicatorInsets];
   [self updateContent:YES];
 }
 
 - (void)reloadData
 {
+  [self clear]; // Clear views
+  
   [_columnsBounds removeAllObjects];
   [_columnsFixed removeAllObjects];
   [_rowsBounds removeAllObjects];
   [_rowsFixed removeAllObjects];
   
-//  [self clea]
+  _fixedColumnsRange = NSMakeRange(NSNotFound, 0);
+  _fixedRowsRange = NSMakeRange(NSNotFound, 0);
 
   [self updateContentSize];
   [self updateContent:NO];
+}
+
+- (void)clear
+{
+  @synchronized (self) {
+    _paddingViewTop = nil;
+    _paddingViewLeft = nil;
+    _leftBackgroundView = nil;
+    _headerBackgroundView = nil;
+//    [[self subviews] makeObjectsPerformSelector:@selector(removeFromSuperview)];
+    for (UIView *it in self.subviews) {
+      if (![it isKindOfClass:[UIRefreshControl class]]) {
+        [it removeFromSuperview];
+      }
+    }
+  }
 }
 
 - (void)updateContent:(BOOL)updateAll
@@ -161,9 +186,9 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
   // Update column positions and create views if necessary
   //
   if (endCl > 0) {
-    for (NSUInteger i = cI ; i <= endCl ; i++) {
+    for (NSUInteger i = cI ; i < endCl ; i++) {
       // Update cells in rows
-      for (NSUInteger j = rows.location ; j <= endEl ; j++) {
+      for (NSUInteger j = rows.location ; j < endEl ; j++) {
         NSIndexPath *path = [NSIndexPath indexPathForRow:j column:i];
         UIView *cell = [self cellAtIndexPath:path];
         if (updateAll) {
@@ -370,7 +395,12 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
     cell = [self dequeueReusableCellWithIdentifier:@"Cell" indexPath:indexPath];
     if (nil == cell) {
       cell = [[UILabel alloc] init];
-      ((UILabel *)cell).text = [_dataSource tableView:self textForCellAtIndexPath:indexPath];
+      id value = [_dataSource tableView:self textForCellAtIndexPath:indexPath];
+      if ([value isKindOfClass:[NSString class]]) {
+        ((UILabel *)cell).text = value;
+      } else {
+        ((UILabel *)cell).text = [NSString stringWithFormat:@"%@", value];
+      }
       [self tableViewCellPrepare:cell atIndexPath:indexPath];
     }
   }
@@ -607,32 +637,32 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
     const CGFloat divCell = (CGFloat)fmod(scrOffset, columnWidth);
 
     range.location = divCell < 0 ? 0 : (NSUInteger)floor(scrOffset / columnWidth);
-    range.length = (NSUInteger)floor(self.frame.size.width / columnWidth) + (divCell != 0 ? 1 : 0);
+    range.length = (NSUInteger)ceil(self.frame.size.width / columnWidth) + (divCell != 0 ? 1 : 0);
     
     // fix count
-    if (range.location >= maxCount) {
+    if (range.location > maxCount) {
       range.location = 0;
       range.length = 0;
-    } else if (range.location + range.length >= maxCount) {
-      range.length = maxCount - range.location - 1;
+    } else if (range.location + range.length > maxCount) {
+      range.length = maxCount - range.location;
     }
   } else {
     bool setted = false;
     CGFloat offset = 0;
-    range.length = maxCount - 1;
+    range.length = maxCount;
     for (NSUInteger i = 0 ; i < maxCount ; i++) {
       offset += [self columnWidthAtIndex:i] + _itemMargin;
       if (offset > scrOffset && !setted) {
         range.location = i;
         setted = true;
       } else if (offset > scrOffset + self.frame.size.width) {
-        range.length = i - range.location;
+        range.length = i - range.location + 1;
         break;
       }
     }
     // fix count
     if (range.location + range.length >= maxCount) {
-      range.length = maxCount - range.location - 1;
+      range.length = maxCount - range.location;
     }
   }
   return range;
@@ -665,14 +695,14 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
     const CGFloat divCell = (CGFloat)fmod(self.contentOffset.y, rowHeight);
 
     range.location = divCell < 0 ? 0 : (NSUInteger)floor(scrOffset / rowHeight);
-    range.length = (NSUInteger)floor(self.frame.size.height / rowHeight) + (divCell != 0 ? 1 : 0);
+    range.length = (NSUInteger)ceil(self.frame.size.height / rowHeight) + (divCell != 0 ? 1 : 0);
     
     // fix count
-    if (range.location >= maxCount) {
+    if (range.location > maxCount) {
       range.location = 0;
       range.length = 0;
-    } else if (range.location + range.length >= maxCount) {
-      range.length = maxCount - range.location - 1;
+    } else if (range.location + range.length > maxCount) {
+      range.length = maxCount - range.location;
     }
   } else {
     bool setted = false;
@@ -689,11 +719,34 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
       }
     }
     // fix count
-    if (range.location + range.length >= maxCount) {
-      range.length = maxCount - range.location - 1;
+    if (range.location + range.length > maxCount) {
+      range.length = maxCount - range.location;
     }
   }
   return range;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+#pragma mark – Events
+////////////////////////////////////////////////////////////////////////////////
+
+- (void)columnViewTapped:(id)sender
+{
+  UIView *view = ((UIGestureRecognizer *)sender).view;
+  [self tableViewTapColumn:view index:[self indexForColumn:view]];
+}
+
+- (void)tableViewTapColumn:(UIView *)column index:(NSInteger)index
+{
+  if (self.delegate &&
+      [self.delegate respondsToSelector:@selector(tableView:tapColumn:index:)]) {
+    [self.delegate tableView:self tapColumn:column index:index];
+  }
+}
+
+- (void)tableViewTapCell:(UIView *)cell indexPath:(NSIndexPath *)indexPath
+{
+  // @TODO IT
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -733,16 +786,14 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
     size.width = self.frame.size.width;
   }
   
-  return size;
+  return self.contentSizeCache = size;
 }
 
 - (UIEdgeInsets)calculateScrollIndicatorInsets
 {
   UIEdgeInsets inserts = UIEdgeInsetsMake(0, 0, 0, 0);
-  if (self.delegate) {
-    if ([self.delegate respondsToSelector:@selector(tableViewHasFixedColumnRow:)]) {
-      inserts.top = [self columnsHeight] + _tablePadding;
-    }
+  if ([self isStrictFixedColumnRow]) {
+    inserts.top = [self columnsHeight] + _tablePadding;
   }
   return inserts;
 }
@@ -900,11 +951,17 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
   return 100000 + indexPath.row + (100000 * indexPath.column);
 }
 
+- (NSInteger)indexForColumn:(UIView *)column
+{
+  return column.tag - 100000000;
+}
+
 - (void)tableViewColumnPrepare:(UIView *)column atIndex:(NSInteger)index
 {
   if (column.superview != self.headerBackgroundView) {
     column.tag = [self tagForColumnAtIndex:index];
     column.frame = [self columnRectAtIndex:index xOffset:0];
+    
     // TODO: Add event handler
     [self.headerBackgroundView addSubview:column];
     [self bringSubviewToFront:column];
@@ -915,6 +972,12 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
     {
       [self.delegate tableView:self prepareColumnView:column atIndex:index];
     }
+    
+    // Bind tap event
+    column.userInteractionEnabled = YES;
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(columnViewTapped:)];
+    tap.cancelsTouchesInView = YES;
+    [column addGestureRecognizer:tap];
   }
 }
 

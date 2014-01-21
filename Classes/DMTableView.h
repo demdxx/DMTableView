@@ -49,7 +49,8 @@
 // Events
 
 - (void)tableViewUpdateContentComplete:(DMTableView *)tableView;
-- (void)tableViewClick:(DMTableView *)tableView cell:(UIView *)cell indexPath:(NSIndexPath *)indexPath;
+- (void)tableView:(DMTableView *)tableView tapColumn:(UIView *)column index:(NSInteger)index;
+- (void)tableView:(DMTableView *)tableView tapCell:(UIView *)cell indexPath:(NSIndexPath *)indexPath;
 
 @end
 
@@ -89,6 +90,8 @@
 @property (nonatomic, readonly) UIView *paddingViewLeft;
 @property (nonatomic, readonly) UIView *paddingViewTop;
 
+@property (nonatomic, assign) CGSize contentSizeCache;
+
 - (void)initControl;
 
 // Getters/Setters
@@ -105,6 +108,7 @@
 - (void)updateContentSize;
 - (void)updateBackgroundViews;
 - (void)reloadData;
+- (void)clear;
 
 // Detecting
 
@@ -149,6 +153,11 @@
 - (CGFloat)columnWidthAtIndex:(NSInteger)index;
 - (CGFloat)columnsHeight;
 - (CGFloat)rowHeightAtIndex:(NSInteger)index;
+
+// Events
+
+- (void)tableViewTapColumn:(UIView *)column index:(NSInteger)index;
+- (void)tableViewTapCell:(UIView *)cell indexPath:(NSIndexPath *)indexPath;
 
 // Helpers
 
