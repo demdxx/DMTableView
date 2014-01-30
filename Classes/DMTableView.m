@@ -442,7 +442,7 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
   if (nil == _containerView) {
     _containerView = [[UIView alloc] initWithFrame:self.frame];
     _containerView.clipsToBounds = YES;
-    _containerView.backgroundColor = [UIColor grayColor];
+    _containerView.backgroundColor = [UIColor clearColor];
     [self addSubview:_containerView];
   }
   return _containerView;
