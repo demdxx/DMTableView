@@ -949,7 +949,6 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
 
 - (CGFloat)columnWidthAtIndex:(NSInteger)index
 {
-  DMAX(@"columnWidthAtIndex");
   if (self.delegate) {
     if ([self.delegate respondsToSelector:@selector(tableView:columnWidthAtIndex:)]) {
       return [self.delegate tableView:self columnWidthAtIndex:index];
@@ -963,7 +962,6 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
 
 - (CGFloat)columnsHeight
 {
-  DMAX(@"columnsHeight");
   if (self.delegate && [self.delegate respondsToSelector:@selector(tableViewColumnsHeight:)]) {
     return [self.delegate tableViewColumnsHeight:self];
   }
@@ -1004,7 +1002,6 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
 
 - (void)tableViewColumnPrepare:(UIView *)column atIndex:(NSInteger)index
 {
-  DMAX(@"tableViewColumnPrepare");
   if (column.superview != self.headerBackgroundView) {
     column.tag = [self tagForColumnAtIndex:index];
     column.frame = [self columnRectAtIndex:index xOffset:0];
