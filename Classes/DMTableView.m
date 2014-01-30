@@ -164,10 +164,22 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
 - (void)clear
 {
   @synchronized (self) {
-    M_OBJECT_RELEASE(_paddingViewTop);
-    M_OBJECT_RELEASE(_paddingViewLeft);
-    M_OBJECT_RELEASE(_leftBackgroundView);
-    M_OBJECT_RELEASE(_headerBackgroundView);
+    if (_paddingViewTop) {
+      [_paddingViewTop removeFromSuperview];
+      M_OBJECT_RELEASE(_paddingViewTop);
+    }
+    if (_paddingViewLeft) {
+      [_paddingViewLeft removeFromSuperview];
+      M_OBJECT_RELEASE(_paddingViewLeft);
+    }
+    if (_leftBackgroundView) {
+      [_leftBackgroundView removeFromSuperview];
+      M_OBJECT_RELEASE(_leftBackgroundView);
+    }
+    if (_headerBackgroundView) {
+      [_headerBackgroundView removeFromSuperview];
+      M_OBJECT_RELEASE(_headerBackgroundView);
+    }
     
     [self.containerView.subviews makeObjectsPerformSelector:@selector(removeFromSuperview)];
 
