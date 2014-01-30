@@ -75,6 +75,7 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
   NSRange _fixedRowsRange;
 }
 
+@synthesize containerView = _containerView;
 @synthesize dataSource = _dataSource;
 @synthesize tablePadding = _tablePadding;
 @synthesize itemMargin = _itemMargin;
@@ -136,6 +137,8 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
   if (cSize.height <= self.bounds.size.height) {
     cSize.height = self.bounds.size.height + 1;
   }
+  
+  self.containerView.frame = CGRectMake(self.tablePadding, self.tablePadding, cSize.width-self.tablePadding*2, cSize.height-self.tablePadding*2);
 
   self.contentSize = cSize;
   self.scrollIndicatorInsets = [self calculateScrollIndicatorInsets];
@@ -161,15 +164,22 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
 - (void)clear
 {
   @synchronized (self) {
-    _paddingViewTop = nil;
-    _paddingViewLeft = nil;
-    _leftBackgroundView = nil;
-    _headerBackgroundView = nil;
-//    [[self subviews] makeObjectsPerformSelector:@selector(removeFromSuperview)];
-    for (UIView *it in self.subviews) {
-      if (![it isKindOfClass:[UIRefreshControl class]]) {
-        [it removeFromSuperview];
-      }
+    M_OBJECT_RELEASE(_paddingViewTop);
+    M_OBJECT_RELEASE(_paddingViewLeft);
+    M_OBJECT_RELEASE(_leftBackgroundView);
+    M_OBJECT_RELEASE(_headerBackgroundView);
+    
+    [self.containerView.subviews makeObjectsPerformSelector:@selector(removeFromSuperview)];
+
+//    for (UIView *it in self.subviews) {
+//      if (![it isKindOfClass:[UIRefreshControl class]]) {
+//        [it removeFromSuperview];
+//      }
+//    }
+    
+    // Complete clear event
+    if (self.delegate && [self.delegate respondsToSelector:@selector(tableViewClear:)]) {
+      [self.delegate tableViewClear:self];
     }
   }
 }
@@ -210,8 +220,8 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
       }
       
       // Prepare column
-      if (self.delegate && [self.delegate respondsToSelector:@selector(tableView:atIndex:)]) {
-        [self.delegate tableView:self atIndex:i];
+      if (self.delegate && [self.delegate respondsToSelector:@selector(tableView:propareColumnAtIndex:)]) {
+        [self.delegate tableView:self propareColumnAtIndex:i];
       }
     }
   }
@@ -220,7 +230,9 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
   [self bringSubviewToFront:self.headerBackgroundView];
 
   // Update fixed fields
-  [self updateFixedColumns:columns rows:rows];
+  if (self.isFixedColumnRow) {
+    [self updateFixedColumns:columns rows:rows];
+  }
   
   // Columns to front
   [self bringSubviewToFront:self.headerBackgroundView];
@@ -242,7 +254,7 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
     padding = self.paddingViewTop;
     if (padding) {
       CGPoint cPos = [self columnRectAtIndex:0 xOffset:0].origin;
-      padding.frame = CGRectMake(0, top, self.contentSize.width, cPos.y);
+      padding.frame = CGRectMake(0, top, self.contentSize.width, _tablePadding);
       padding.alpha = 1.f;
       [self bringSubviewToFront:padding];
     }
@@ -275,16 +287,16 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
   columns = [self fixedColumnsRangeForRange:columns unical:NO];
   
   if (columns.location < 1000) {
-    CGFloat xOffset = _tablePadding;
-    CGFloat yOffset = _tablePadding;
+    CGFloat xOffset = 0; // ADCV: _tablePadding;
+    CGFloat yOffset = 0; // ADCV: _tablePadding;
     endCl = MAX(columns.location + columns.length, endCl);
     
-    for (NSInteger i = columns.location ; i <= endCl ; i++) {
+    for (NSInteger i = columns.location ; i < endCl ; i++) {
       if ([self isFixedColumn:i]) {
         CGRect cframe;
         
         // Update cells in rows
-        for (NSUInteger j = rows.location ; j <= endEl ; j++) {
+        for (NSUInteger j = rows.location ; j < endEl ; j++) {
           NSIndexPath *path = [NSIndexPath indexPathForRow:j column:i];
           UIView *cell = [self cellAtIndexPath:path];
           cframe = [self cellRectAtIndexPath:path xOffset:xOffset yOffset:yOffset];
@@ -304,15 +316,15 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
       }
     }
   } else if (updateRows) {
-    CGFloat xOffset = _tablePadding;
-    CGFloat yOffset = _tablePadding;
+    CGFloat xOffset = 0; // ADCV: _tablePadding;
+    CGFloat yOffset = 0; // ADCV: _tablePadding;
     const NSUInteger endEl = rows.location + rows.length;
     
     // Update cells in rows
-    for (NSUInteger j = rows.location ; j <= endEl ; j++) {
+    for (NSUInteger j = rows.location ; j < endEl ; j++) {
       if ([self isFixedRow:j]) {
         CGRect cframe;
-        for (NSUInteger i = cI ; i <= endCl ; i++) {
+        for (NSUInteger i = cI ; i < endCl ; i++) {
           NSIndexPath *path = [NSIndexPath indexPathForRow:j column:i];
           UIView *cell = [self cellAtIndexPath:path];
           cframe = [self cellRectAtIndexPath:path xOffset:xOffset yOffset:yOffset];
@@ -425,11 +437,22 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
   }
 }
 
+- (UIView *)containerView
+{
+  if (nil == _containerView) {
+    _containerView = [[UIView alloc] initWithFrame:self.frame];
+    _containerView.clipsToBounds = YES;
+    _containerView.backgroundColor = [UIColor grayColor];
+    [self addSubview:_containerView];
+  }
+  return _containerView;
+}
+
 - (UIView *)headerBackgroundView
 {
   if (nil == _headerBackgroundView) {
     _headerBackgroundView = [[UIView alloc] init];
-    [self addSubview:_headerBackgroundView];
+    [self.containerView addSubview:_headerBackgroundView];
   }
   return _headerBackgroundView;
 }
@@ -438,7 +461,7 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
 {
   if (nil == _leftBackgroundView) {
     _leftBackgroundView = [[UIView alloc] init];
-    [self addSubview:_leftBackgroundView];
+    [self.containerView addSubview:_leftBackgroundView];
   }
   return _leftBackgroundView;
 }
@@ -522,7 +545,7 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
 
 - (BOOL)isFixedColumn:(NSInteger)index
 {
-  if ([_columnsFixed containsObject:@(index)]) {
+  if (_columnsFixed && [_columnsFixed containsObject:@(index)]) {
     return YES;
   }
   if (self.delegate && [self.delegate respondsToSelector:@selector(tableView:isFixedColumn:)]) {
@@ -536,7 +559,7 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
 
 - (BOOL)isFixedRow:(NSInteger)index
 {
-  if ([_rowsFixed containsObject:@(index)]) {
+  if (_rowsFixed && [_rowsFixed containsObject:@(index)]) {
     return YES;
   }
   if (self.delegate && [self.delegate respondsToSelector:@selector(tableView:isFixedRow:)]) {
@@ -785,7 +808,7 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
   if (size.width < self.frame.size.width) {
     size.width = self.frame.size.width;
   }
-  
+    
   return self.contentSizeCache = size;
 }
 
@@ -810,7 +833,7 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
   NSString *key = [NSString stringWithFormat:@"%ld", (long)index];
   
   if (nil == _columnsBounds[key]) {
-    CGFloat xOff = _tablePadding;
+    CGFloat xOff = 0; // ADCV: _tablePadding;
     
     // Calc row "X" position
     if (![self.delegate respondsToSelector:@selector(tableView:columnWidthAtIndex:)]) {
@@ -830,6 +853,13 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
   return point;
 }
 
+- (CGPoint)columnBoundsAbs:(NSInteger)index
+{
+  CGPoint p = [self columnBounds:index];
+  p.x += _tablePadding;
+  return p;
+}
+
 /**
  * Get row Y position & HEIGH
  *
@@ -842,7 +872,7 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
   NSString *key = [NSString stringWithFormat:@"%ld", (long)index];
   
   if (nil == _rowsBounds[key]) {
-    CGFloat yOff = [self columnsHeight] + _itemMargin + _tablePadding;
+    CGFloat yOff = [self columnsHeight] + _itemMargin; // ADCV: + _tablePadding;
     
     // Calc row "Y" position
     if (![self.delegate respondsToSelector:@selector(tableView:rowHeightAtIndex:)]) {
@@ -871,7 +901,7 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
 - (CGRect)columnRectAtIndex:(NSInteger)index xOffset:(CGFloat)offset
 {
   CGPoint cPoint = [self columnBounds:index];
-  CGRect rect = CGRectMake(cPoint.x, _tablePadding, cPoint.y, [self columnsHeight]);
+  CGRect rect = CGRectMake(cPoint.x, 0/* ADCV: _tablePadding */, cPoint.y, [self columnsHeight]);
   
   // Post process
   if (self.delegate) {
@@ -882,6 +912,13 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
     }
   }
   return rect;
+}
+
+- (CGRect)columnRectAtIndexAbs:(NSInteger)index xOffset:(CGFloat)offset
+{
+  CGRect r = [self columnRectAtIndex:index xOffset:offset];
+  r.origin.y += _tablePadding;
+  return r;
 }
 
 - (CGRect)cellRectAtIndexPath:(NSIndexPath *)indexPath xOffset:(CGFloat)xOffset yOffset:(CGFloat)yOffset
@@ -903,8 +940,16 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
   return rect;
 }
 
+- (CGRect)cellRectAtIndexPathAbs:(NSIndexPath *)indexPath xOffset:(CGFloat)xOffset yOffset:(CGFloat)yOffset
+{
+  CGRect r = [self cellRectAtIndexPath:indexPath xOffset:xOffset yOffset:yOffset];
+  r.origin.y += _tablePadding;
+  return r;
+}
+
 - (CGFloat)columnWidthAtIndex:(NSInteger)index
 {
+  DMAX(@"columnWidthAtIndex");
   if (self.delegate) {
     if ([self.delegate respondsToSelector:@selector(tableView:columnWidthAtIndex:)]) {
       return [self.delegate tableView:self columnWidthAtIndex:index];
@@ -918,6 +963,7 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
 
 - (CGFloat)columnsHeight
 {
+  DMAX(@"columnsHeight");
   if (self.delegate && [self.delegate respondsToSelector:@selector(tableViewColumnsHeight:)]) {
     return [self.delegate tableViewColumnsHeight:self];
   }
@@ -958,6 +1004,7 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
 
 - (void)tableViewColumnPrepare:(UIView *)column atIndex:(NSInteger)index
 {
+  DMAX(@"tableViewColumnPrepare");
   if (column.superview != self.headerBackgroundView) {
     column.tag = [self tagForColumnAtIndex:index];
     column.frame = [self columnRectAtIndex:index xOffset:0];
@@ -987,8 +1034,8 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
     cell.tag = [self tagForCellAtIndexPath:indexPath];
     cell.frame = [self cellRectAtIndexPath:indexPath xOffset:0 yOffset:0];
     // TODO: Add event handler
-    [self addSubview:cell];
-    [self sendSubviewToBack:cell];
+    [self.containerView addSubview:cell];
+    [self.containerView sendSubviewToBack:cell];
     
     // Prepare column view at index
     if (self.delegate &&

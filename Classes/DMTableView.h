@@ -41,7 +41,7 @@
 
 // Helpers
 
-- (void)tableView:(DMTableView *)tableView atIndex:(NSInteger)index;
+- (void)tableView:(DMTableView *)tableView propareColumnAtIndex:(NSInteger)index;
 - (void)tableView:(DMTableView *)tableView prepareColumnView:(UIView *)column atIndex:(NSInteger)index;
 - (void)tableView:(DMTableView *)tableView prepareRowAtIndex:(NSInteger)index;
 - (void)tableView:(DMTableView *)tableView prepareCellView:(UIView *)cell atIndexPath:(NSIndexPath *)indexPath;
@@ -51,6 +51,7 @@
 - (void)tableViewUpdateContentComplete:(DMTableView *)tableView;
 - (void)tableView:(DMTableView *)tableView tapColumn:(UIView *)column index:(NSInteger)index;
 - (void)tableView:(DMTableView *)tableView tapCell:(UIView *)cell indexPath:(NSIndexPath *)indexPath;
+- (void)tableViewClear:(DMTableView *)tableView;
 
 @end
 
@@ -84,6 +85,8 @@
 
 @property (nonatomic, assign) CGFloat tablePadding;
 @property (nonatomic, assign) CGFloat itemMargin;
+
+@property (nonatomic, strong, readonly) UIView *containerView;
 
 @property (nonatomic, strong) UIView* headerBackgroundView;
 
@@ -140,6 +143,14 @@
 - (CGPoint)columnBounds:(NSInteger)index;
 
 /**
+ * Get column X with padding position & WIDTH
+ *
+ * @param index
+ * @return {x: X, y: WIDTH}
+ */
+- (CGPoint)columnBoundsAbs:(NSInteger)index;
+
+/**
  * Get row Y position & HEIGH
  *
  * @param index
@@ -147,8 +158,24 @@
  */
 - (CGPoint)rowBounds:(NSInteger)index;
 
+/**
+ * Calculate column rect item at index
+ *
+ * @param index
+ * @return Rect for column
+ */
 - (CGRect)columnRectAtIndex:(NSInteger)index xOffset:(CGFloat)offset;
+
+/**
+ * Calculate column rect item with padding at index
+ *
+ * @param index
+ * @return Rect for column
+ */
+- (CGRect)columnRectAtIndexAbs:(NSInteger)index xOffset:(CGFloat)offset;
+
 - (CGRect)cellRectAtIndexPath:(NSIndexPath *)indexPath xOffset:(CGFloat)xOffset yOffset:(CGFloat)yOffset;
+- (CGRect)cellRectAtIndexPathAbs:(NSIndexPath *)indexPath xOffset:(CGFloat)xOffset yOffset:(CGFloat)yOffset;
 
 - (CGFloat)columnWidthAtIndex:(NSInteger)index;
 - (CGFloat)columnsHeight;
