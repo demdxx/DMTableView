@@ -94,6 +94,7 @@
 @property (nonatomic, readonly) UIView *paddingViewTop;
 
 @property (nonatomic, assign) CGSize contentSizeCache;
+@property (nonatomic, assign) BOOL hideColumnsIfEmpty;
 
 - (void)initControl;
 

@@ -55,6 +55,7 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
 - (NSInteger)tagForColumnAtIndex:(NSInteger)index;
 - (NSInteger)tagForCellAtIndexPath:(NSIndexPath *)indexPath;
 - (NSInteger)indexForColumn:(UIView *)column;
+- (CGPoint)positionForCell:(UIView *)column;
 
 @end
 
@@ -134,11 +135,18 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
 - (void)updateContentSize
 {
   CGSize cSize = [self calculateContentSize];
-  if (cSize.height <= self.bounds.size.height) {
-    cSize.height = self.bounds.size.height + 1;
-  }
   
-  self.containerView.frame = CGRectMake(self.tablePadding, self.tablePadding, cSize.width-self.tablePadding*2, cSize.height-self.tablePadding*2);
+  if (self.hideColumnsIfEmpty && self.rowsCount < 1) {
+    CGRect frame = self.frame;
+    frame.size.height += 1;
+    cSize = frame.size;
+    self.containerView.frame = frame;
+  } else {
+    if (cSize.height <= self.bounds.size.height) {
+      cSize.height = self.bounds.size.height + 1;
+    }
+    self.containerView.frame = CGRectMake(self.tablePadding, self.tablePadding, cSize.width-self.tablePadding*2, cSize.height-self.tablePadding*2);
+  }
 
   self.contentSize = cSize;
   self.scrollIndicatorInsets = [self calculateScrollIndicatorInsets];
@@ -198,6 +206,15 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
 
 - (void)updateContent:(BOOL)updateAll
 {
+  if (self.hideColumnsIfEmpty && self.rowsCount < 1) {
+    // Complete update event
+    if (self.delegate
+        && [self.delegate respondsToSelector:@selector(tableViewUpdateContentComplete:)]) {
+      [self.delegate tableViewUpdateContentComplete:self];
+    }
+    return;
+  }
+  
   NSRange columns = [self visibleColumnsRange];
   NSRange rows = [self visibleRowsRange];
   NSUInteger endCl = columns.location + columns.length;
@@ -773,15 +790,23 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
 
 - (void)tableViewTapColumn:(UIView *)column index:(NSInteger)index
 {
-  if (self.delegate &&
-      [self.delegate respondsToSelector:@selector(tableView:tapColumn:index:)]) {
+  if (self.delegate && [self.delegate respondsToSelector:@selector(tableView:tapColumn:index:)]) {
     [self.delegate tableView:self tapColumn:column index:index];
   }
 }
 
+- (void)cellViewTapped:(id)sender
+{
+  UIView *view = ((UIGestureRecognizer *)sender).view;
+  CGPoint point = [self positionForCell:view];
+  [self tableViewTapCell:view indexPath:[NSIndexPath indexPathForRow:point.x column:point.y]];
+}
+
 - (void)tableViewTapCell:(UIView *)cell indexPath:(NSIndexPath *)indexPath
 {
-  // @TODO IT
+  if (self.delegate && [self.delegate respondsToSelector:@selector(tableView:tapCell:indexPath:)]) {
+    [self.delegate tableView:self tapCell:cell indexPath:indexPath];
+  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1012,6 +1037,12 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
   return column.tag - 100000000;
 }
 
+- (CGPoint)positionForCell:(UIView *)cell
+{
+  const NSInteger start = cell.tag - 100000;
+  return CGPointMake(start % 100000, floor(start / 100000));
+}
+
 - (void)tableViewColumnPrepare:(UIView *)column atIndex:(NSInteger)index
 {
   if (column.superview != self.headerBackgroundView) {
@@ -1052,6 +1083,12 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
     {
       [self.delegate tableView:self prepareCellView:cell atIndexPath:indexPath];
     }
+    
+    // Bind tap event
+    cell.userInteractionEnabled = YES;
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(cellViewTapped:)];
+    tap.cancelsTouchesInView = YES;
+    [cell addGestureRecognizer:tap];
   }
 }
 
