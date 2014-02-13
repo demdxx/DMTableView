@@ -74,6 +74,11 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
   
   NSRange _fixedColumnsRange;
   NSRange _fixedRowsRange;
+  
+  // Additional size for every column
+  CGFloat _columnStreatchComponent;
+  
+  BOOL _isUpdateContentSize;
 }
 
 @synthesize containerView = _containerView;
@@ -127,9 +132,22 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
   if (!init) {
     [self updateContentSize];
     init = true;
-  } else {
+  } else if (!_isUpdateContentSize) {
     [self updateContent:NO];
   }
+}
+
+- (void) setFrame:(CGRect)frame
+{
+  _isUpdateContentSize = YES;
+
+  const bool sizeChanged = !CGSizeEqualToSize(frame.size, self.frame.size);
+  [super setFrame:frame];
+  
+  if (sizeChanged) {
+    [self updateContentSize];
+  }
+  _isUpdateContentSize = NO;
 }
 
 - (void)updateContentSize
@@ -209,14 +227,14 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
   if (self.hideColumnsIfEmpty && self.rowsCount < 1) {
     // Complete update event
     if (self.delegate
-        && [self.delegate respondsToSelector:@selector(tableViewUpdateContentComplete:)]) {
-      [self.delegate tableViewUpdateContentComplete:self];
+        && [self.delegate respondsToSelector:@selector(tableViewUpdateContentComplete:updateAll:)]) {
+      [self.delegate tableViewUpdateContentComplete:self updateAll:updateAll];
     }
     return;
   }
   
-  NSRange columns = [self visibleColumnsRange];
-  NSRange rows = [self visibleRowsRange];
+  NSRange columns = updateAll ? NSMakeRange(0, self.columnsCount) : [self visibleColumnsRange];
+  NSRange rows = updateAll ? NSMakeRange(0, self.rowsCount) : [self visibleRowsRange];
   NSUInteger endCl = columns.location + columns.length;
   NSUInteger endEl = rows.location + rows.length;
   NSUInteger cI = columns.location;
@@ -249,8 +267,8 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
       }
       
       // Prepare column
-      if (self.delegate && [self.delegate respondsToSelector:@selector(tableView:propareColumnAtIndex:)]) {
-        [self.delegate tableView:self propareColumnAtIndex:i];
+      if (self.delegate && [self.delegate respondsToSelector:@selector(tableView:prepareColumnAtIndex:)]) {
+        [self.delegate tableView:self prepareColumnAtIndex:i];
       }
     }
   }
@@ -294,8 +312,8 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
   
   // Complete update event
   if (self.delegate
-  && [self.delegate respondsToSelector:@selector(tableViewUpdateContentComplete:)]) {
-    [self.delegate tableViewUpdateContentComplete:self];
+  && [self.delegate respondsToSelector:@selector(tableViewUpdateContentComplete:updateAll:)]) {
+    [self.delegate tableViewUpdateContentComplete:self updateAll:updateAll];
   }
 }
 
@@ -426,15 +444,14 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
 
 - (UIView *)cellAtIndexPath:(NSIndexPath *)indexPath
 {
-  UIView *cell;
-  if ([self.delegate respondsToSelector:@selector(tableView:cellAtIndexPath:)]) {
-    cell = [self.delegate tableView:self cellAtIndexPath:indexPath];
-    if (cell.superview != self) {
-      [self tableViewCellPrepare:cell atIndexPath:indexPath];
-    }
-  } else if ([_dataSource respondsToSelector:@selector(tableView:textForCellAtIndexPath:)]) {
-    cell = [self dequeueReusableCellWithIdentifier:@"Cell" indexPath:indexPath];
-    if (nil == cell) {
+  UIView *cell = [self dequeueReusableCellWithIdentifier:@"Cell" indexPath:indexPath];
+  if (nil == cell) {
+    if ([self.delegate respondsToSelector:@selector(tableView:cellAtIndexPath:)]) {
+      cell = [self.delegate tableView:self cellAtIndexPath:indexPath];
+      if (cell.superview != self) {
+        [self tableViewCellPrepare:cell atIndexPath:indexPath];
+      }
+    } else if ([_dataSource respondsToSelector:@selector(tableView:textForCellAtIndexPath:)]) {
       cell = [[UILabel alloc] init];
       id value = [_dataSource tableView:self textForCellAtIndexPath:indexPath];
       if ([value isKindOfClass:[NSString class]]) {
@@ -816,6 +833,7 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
 - (CGSize)calculateContentSize
 {
   CGSize size = CGSizeMake(_tablePadding*2, [self columnsHeight]+_itemMargin+_tablePadding*2);
+  _columnStreatchComponent = 0.f;
   
   // Calc width by colums
   if (![self.delegate respondsToSelector:@selector(tableView:columnWidthAtIndex:)]) {
@@ -825,6 +843,12 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
       size.width += [self columnWidthAtIndex:i] + _itemMargin;
     }
     size.width -= _itemMargin;
+  }
+  
+  // Calculate additional size
+  if (self.stretchTable && self.bounds.size.width > size.width) {
+    _columnStreatchComponent = (self.bounds.size.width - size.width) / self.columnsCount;
+    size.width = self.bounds.size.width;
   }
   
   // Calc width by rows
@@ -986,15 +1010,16 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
 
 - (CGFloat)columnWidthAtIndex:(NSInteger)index
 {
+  CGFloat width = 44.f;
   if (self.delegate) {
     if ([self.delegate respondsToSelector:@selector(tableView:columnWidthAtIndex:)]) {
-      return [self.delegate tableView:self columnWidthAtIndex:index];
+      width = [self.delegate tableView:self columnWidthAtIndex:index];
     }
     if ([self.delegate respondsToSelector:@selector(tableViewColumnWidth:)]) {
-      return [self.delegate tableViewColumnWidth:self];
+      width = [self.delegate tableViewColumnWidth:self];
     }
   }
-  return 44;
+  return width + _columnStreatchComponent;
 }
 
 - (CGFloat)columnsHeight

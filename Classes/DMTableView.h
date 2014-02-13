@@ -41,14 +41,14 @@
 
 // Helpers
 
-- (void)tableView:(DMTableView *)tableView propareColumnAtIndex:(NSInteger)index;
+- (void)tableView:(DMTableView *)tableView prepareColumnAtIndex:(NSInteger)index;
 - (void)tableView:(DMTableView *)tableView prepareColumnView:(UIView *)column atIndex:(NSInteger)index;
 - (void)tableView:(DMTableView *)tableView prepareRowAtIndex:(NSInteger)index;
 - (void)tableView:(DMTableView *)tableView prepareCellView:(UIView *)cell atIndexPath:(NSIndexPath *)indexPath;
 
 // Events
 
-- (void)tableViewUpdateContentComplete:(DMTableView *)tableView;
+- (void)tableViewUpdateContentComplete:(DMTableView *)tableView updateAll:(BOOL)updateAll;
 - (void)tableView:(DMTableView *)tableView tapColumn:(UIView *)column index:(NSInteger)index;
 - (void)tableView:(DMTableView *)tableView tapCell:(UIView *)cell indexPath:(NSIndexPath *)indexPath;
 - (void)tableViewClear:(DMTableView *)tableView;
@@ -95,6 +95,7 @@
 
 @property (nonatomic, assign) CGSize contentSizeCache;
 @property (nonatomic, assign) BOOL hideColumnsIfEmpty;
+@property (nonatomic, assign) BOOL stretchTable;
 
 - (void)initControl;
 
