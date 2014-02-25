@@ -160,11 +160,15 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
     cSize = frame.size;
     self.containerView.frame = frame;
   } else {
-    if (cSize.height <= self.bounds.size.height) {
+    if (cSize.height * self.zoomScale <= self.bounds.size.height) {
       cSize.height = self.bounds.size.height + 1;
+    } else {
+      cSize.height *= self.zoomScale;
     }
     self.containerView.frame = CGRectMake(self.tablePadding, self.tablePadding, cSize.width-self.tablePadding*2, cSize.height-self.tablePadding*2);
   }
+
+  cSize.width *= self.zoomScale;
 
   self.contentSize = cSize;
   self.scrollIndicatorInsets = [self calculateScrollIndicatorInsets];
@@ -399,6 +403,10 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
     }
     CGRect topColumnsFrame = CGRectMake(0, yOffset, self.contentSize.width,
                                         _tablePadding + self.columnsHeight + _itemMargin);
+    if (self.zoomScale != 1.f) {
+      topColumnsFrame.origin.y /= self.zoomScale;
+      topColumnsFrame.size.width *= self.zoomScale;
+    }
     self.headerBackgroundView.frame = topColumnsFrame;
   }
   
