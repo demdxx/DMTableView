@@ -304,7 +304,6 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
     
     padding = self.paddingViewTop;
     if (padding) {
-      CGPoint cPos = [self columnRectAtIndex:0 xOffset:0].origin;
       padding.frame = CGRectMake(0, top, self.contentSize.width, _tablePadding);
       padding.alpha = 1.f;
       [self bringSubviewToFront:padding];
@@ -898,7 +897,7 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
  */
 - (CGPoint)columnBounds:(NSInteger)index
 {
-  CGPoint point = CGPointMake(0, 0);
+  CGPoint point;
   NSString *key = [NSString stringWithFormat:@"%ld", (long)index];
   
   if (nil == _columnsBounds[key]) {
@@ -937,7 +936,7 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
  */
 - (CGPoint)rowBounds:(NSInteger)index
 {
-  CGPoint point = CGPointMake(0, 0);
+  CGPoint point;
   NSString *key = [NSString stringWithFormat:@"%ld", (long)index];
   
   if (nil == _rowsBounds[key]) {
