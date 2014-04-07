@@ -165,7 +165,7 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
     } else {
       cSize.height *= self.zoomScale;
     }
-    self.containerView.frame = CGRectMake(self.tablePadding, self.tablePadding, cSize.width-self.tablePadding*2, cSize.height-self.tablePadding*2);
+    self.containerView.frame = CGRectMake(self.tablePadding, self.tablePadding, cSize.width-self.tablePadding*2, cSize.height / self.zoomScale -self.tablePadding*2);
   }
 
   cSize.width *= self.zoomScale;
@@ -405,6 +405,9 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
     if (self.zoomScale != 1.f) {
       topColumnsFrame.origin.y /= self.zoomScale;
       topColumnsFrame.size.width *= self.zoomScale;
+    }
+    if (topColumnsFrame.size.width < self.contentSizeCache.width) {
+      topColumnsFrame.size.width = self.contentSizeCache.width;
     }
     self.headerBackgroundView.frame = topColumnsFrame;
   }
