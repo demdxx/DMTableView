@@ -39,6 +39,8 @@
 - (CGFloat)tableViewRowHeight:(DMTableView *)tableView;
 - (CGFloat)tableView:(DMTableView *)tableView rowHeightAtIndex:(NSInteger)index;
 
+- (CGFloat)tableViewStreatchComponent:(DMTableView *)tableView tableWidth:(CGFloat)width;
+
 // Helpers
 
 - (void)tableView:(DMTableView *)tableView prepareColumnAtIndex:(NSInteger)index;

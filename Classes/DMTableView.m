@@ -165,10 +165,12 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
     } else {
       cSize.height *= self.zoomScale;
     }
-    self.containerView.frame = CGRectMake(self.tablePadding, self.tablePadding, cSize.width-self.tablePadding*2, cSize.height / self.zoomScale -self.tablePadding*2);
+    self.containerView.frame = CGRectMake(_tablePadding, _tablePadding, cSize.width, cSize.height / self.zoomScale);
   }
 
   cSize.width *= self.zoomScale;
+  cSize.width += _tablePadding * 2;
+  cSize.height += _tablePadding * 2;
 
   self.contentSize = cSize;
   self.scrollIndicatorInsets = [self calculateScrollIndicatorInsets];
@@ -842,12 +844,13 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
 
 - (CGSize)calculateContentSize
 {
-  CGSize size = CGSizeMake(_tablePadding*2, [self columnsHeight]+_itemMargin+_tablePadding*2);
+  CGSize size = CGSizeMake(0, [self columnsHeight]+_itemMargin);
   _columnStreatchComponent = 0.f;
+  const CGFloat curWidth = self.bounds.size.width - _tablePadding*2;
   
   // Calc width by colums
   if (![self.delegate respondsToSelector:@selector(tableView:columnWidthAtIndex:)]) {
-    size.width = self.columnsCount * ([self columnWidthAtIndex:-1] + _itemMargin) - _itemMargin;
+    size.width += self.columnsCount * ([self columnWidthAtIndex:-1] + _itemMargin) - _itemMargin;
   } else {
     for (int i=0; i<self.columnsCount; i++) {
       size.width += [self columnWidthAtIndex:i] + _itemMargin;
@@ -856,9 +859,18 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
   }
   
   // Calculate additional size
-  if (self.stretchTable && self.bounds.size.width > size.width) {
-    _columnStreatchComponent = (self.bounds.size.width - size.width) / self.columnsCount;
-    size.width = self.bounds.size.width;
+  if (self.stretchTable) {
+    if ([self.delegate respondsToSelector:@selector(tableViewStreatchComponent:tableWidth:)]) {
+      _columnStreatchComponent = [self.delegate tableViewStreatchComponent:self tableWidth:size.width];
+      if (_columnStreatchComponent > 0) {
+        size.width += self.columnsCount * _columnStreatchComponent;
+      } else {
+        _columnStreatchComponent = 0;
+      }
+    } else if (curWidth > size.width) {
+      _columnStreatchComponent = (curWidth - size.width) / self.columnsCount;
+      size.width = curWidth;
+    }
   }
   
   // Calc width by rows
@@ -876,8 +888,8 @@ static inline UIColor *prepareBackgroundPadding(UIColor *bg)
 //    size.height = self.frame.size.height;
 //  }
   
-  if (size.width < self.frame.size.width) {
-    size.width = self.frame.size.width;
+  if (size.width < curWidth) {
+    size.width = curWidth;
   }
     
   return self.contentSizeCache = size;
